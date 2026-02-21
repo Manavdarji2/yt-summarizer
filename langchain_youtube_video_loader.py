@@ -1,6 +1,7 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from google.api_core.exceptions import ResourceExhausted
 from dotenv import load_dotenv
 from langchain_community.document_loaders import YoutubeLoader
 from langchain.chat_models import init_chat_model
@@ -20,6 +21,11 @@ embeddings = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-001",
     task_type="retrieval_document"
 )
+
+
+class APILimitReachedError(Exception):
+    """Exception raised when the API key has reached its limit."""
+    pass
 
 
 def create_vector_db_from_youtube_url(video_url)->FAISS:
@@ -43,10 +49,13 @@ def create_vector_db_from_youtube_url(video_url)->FAISS:
         batch_texts = texts[i:i + batch_size]
         batch_metadatas = metadatas[i:i + batch_size]
         
-        if db is None:
-            db = FAISS.from_texts(batch_texts, embedding=embeddings, metadatas=batch_metadatas)
-        else:
-            db.add_texts(batch_texts, metadatas=batch_metadatas)
+        try:
+            if db is None:
+                db = FAISS.from_texts(batch_texts, embedding=embeddings, metadatas=batch_metadatas)
+            else:
+                db.add_texts(batch_texts, metadatas=batch_metadatas)
+        except ResourceExhausted:
+            raise APILimitReachedError("API Key limit reached during vector database creation.")
         
         if i + batch_size < len(texts):
             # Short sleep between batches to avoid hitting RPM limits
@@ -89,7 +98,11 @@ def get_response_from_query(db:FAISS, query, k=3):
     )
     
     chain = video_summary_prompt | llm
-    response = chain.invoke({"query": query, "docs": docs_page_content})
+    try:
+        response = chain.invoke({"query": query, "docs": docs_page_content})
+    except ResourceExhausted:
+        raise APILimitReachedError("API Key limit reached during query execution.")
+        
     content = response.content.replace("\n", " ")
     return content
 

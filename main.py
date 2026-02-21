@@ -18,8 +18,14 @@ with st.sidebar:
 
 
 if query and youtube_url:
-    db=lyvl.create_vector_db_from_youtube_url(youtube_url)
-    response=lyvl.get_response_from_query(db, query)
-    st.subheader("Answer")
-    st.markdown(response, unsafe_allow_html=True)
+    try:
+        db = lyvl.create_vector_db_from_youtube_url(youtube_url)
+        response = lyvl.get_response_from_query(db, query)
+        st.subheader("Answer")
+        st.markdown(response, unsafe_allow_html=True)
+    except lyvl.APILimitReachedError as e:
+        st.error(f"**API Limit Reached:** {str(e)}")
+        st.info("The Generative AI API has reached its usage limit. Please try again later or check your API quota.")
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {str(e)}")
     
