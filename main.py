@@ -22,3 +22,4 @@ if query and youtube_url:
     response=lyvl.get_response_from_query(db, query)
     st.subheader("Answer")
     st.markdown(response, unsafe_allow_html=True)
+    
